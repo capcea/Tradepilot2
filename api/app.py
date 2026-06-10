@@ -289,66 +289,489 @@ def _risk_day_dict(ctx: ApiContext, d: date) -> dict:
 
 
 DASHBOARD_HTML = """<!doctype html>
-<html><head><meta charset="utf-8"><title>TradePilot - SSR v1</title>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TradePilot SSR v1 - Control Panel</title>
 <style>
- body{font-family:system-ui,sans-serif;background:#111;color:#ddd;margin:0;padding:1em}
- .zone{border:1px solid #333;border-radius:6px;padding:1em;margin-bottom:1em}
- .lights span{display:inline-block;margin-right:1.2em}
- .ok{color:#4c4}.bad{color:#e55}
- button{background:#222;color:#ddd;border:1px solid #555;padding:.5em 1em;margin-right:.6em;cursor:pointer}
- button.danger{border-color:#a33;color:#f88}
- table{border-collapse:collapse;width:100%}td,th{border:1px solid #333;padding:.3em .6em;font-size:.85em}
- h1{font-size:1.2em}h2{font-size:1em;color:#9ab}
+ :root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --line:#2a313c; --ink:#e6edf3;
+  --mut:#8b949e; --ok:#3fb950; --bad:#f85149; --warn:#d29922; --idle:#6e7681;
+  --accent:#58a6ff; --accentbg:#1f6feb;
+ }
+ *{box-sizing:border-box}
+ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);
+   color:var(--ink);margin:0;font-size:14px;line-height:1.5}
+ a{color:var(--accent)}
+ .mut{color:var(--mut)}
+ .small{font-size:12px}
+ code{background:#010409;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px}
+ /* header */
+ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+   padding:12px 18px;background:var(--panel);border-bottom:1px solid var(--line);
+   position:sticky;top:0;z-index:5}
+ header .brand{font-weight:700;font-size:16px}
+ header .brand span{color:var(--mut);font-weight:400;font-size:12px;margin-left:6px}
+ header .spacer{flex:1}
+ .conn{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--mut)}
+ .hbtn{background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+   border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px}
+ .hbtn:hover{border-color:var(--accent)}
+ /* layout */
+ main{padding:18px;max-width:1180px;margin:0 auto;
+   display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+ .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+ .card.full{grid-column:1 / -1}
+ @media(max-width:780px){main{grid-template-columns:1fr}}
+ .card h2{font-size:13px;margin:0 0 4px;text-transform:uppercase;letter-spacing:.04em;color:var(--accent)}
+ .card .sub{margin:0 0 14px;font-size:12px;color:var(--mut)}
+ /* status rows */
+ .srow{display:flex;align-items:flex-start;gap:11px;padding:9px 0;border-top:1px solid var(--line)}
+ .srow:first-of-type{border-top:none}
+ .dot{width:11px;height:11px;border-radius:50%;margin-top:5px;flex:none;background:var(--idle)}
+ .dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}
+ .dot.warn{background:var(--warn)}.dot.idle{background:var(--idle)}
+ .srow .body{flex:1;min-width:0}
+ .srow .ttl{font-weight:600}
+ .srow .val{font-weight:600}
+ .srow .val.ok{color:var(--ok)}.srow .val.bad{color:var(--bad)}
+ .srow .val.warn{color:var(--warn)}.srow .val.idle{color:var(--mut)}
+ .srow .mn{font-size:12px;color:var(--mut);margin-top:1px}
+ .srow .top{display:flex;justify-content:space-between;gap:10px}
+ /* controls */
+ .ctl{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line)}
+ .ctl:first-of-type{border-top:none}
+ .ctl .txt{flex:1}
+ .ctl .txt b{display:block}
+ .ctl .txt small{color:var(--mut)}
+ button.act{border:1px solid var(--line);background:var(--panel2);color:var(--ink);
+   border-radius:6px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:600;min-width:104px}
+ button.act:hover:not(:disabled){border-color:var(--accent)}
+ button.act:disabled{opacity:.4;cursor:not-allowed}
+ button.act.danger{border-color:#7d2622;color:#ff9a93}
+ button.act.danger:hover:not(:disabled){background:#3d1513;border-color:var(--bad)}
+ /* risk */
+ .big{font-size:30px;font-weight:700;line-height:1.1}
+ .bar{height:9px;border-radius:5px;background:var(--panel2);overflow:hidden;margin:10px 0 4px;position:relative}
+ .bar > i{display:block;height:100%;border-radius:5px}
+ .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+ .chip{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:7px 11px;font-size:12px}
+ .chip b{font-size:15px;display:block}
+ .kv{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-top:12px;
+   border-top:1px solid var(--line);padding-top:10px}
+ /* tables */
+ table{border-collapse:collapse;width:100%;font-size:12.5px}
+ th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line)}
+ th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em}
+ tbody tr:hover{background:var(--panel2)}
+ .badge{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid}
+ .badge.long{color:var(--ok);border-color:#1f7a36;background:#0f2417}
+ .badge.short{color:var(--bad);border-color:#7d2622;background:#2a100e}
+ .badge.neu{color:var(--mut);border-color:var(--line)}
+ .pass{color:var(--ok);font-weight:700}.fail{color:var(--bad);font-weight:700}
+ .empty{color:var(--mut);font-size:13px;padding:10px 0;text-align:center;
+   border:1px dashed var(--line);border-radius:8px}
+ .pos-num{color:var(--ok)}.neg-num{color:var(--bad)}
+ .lvl-error{color:var(--bad)}.lvl-warn,.lvl-warning{color:var(--warn)}.lvl-info{color:var(--mut)}
+ /* overlay (login + confirm + help) */
+ .overlay{position:fixed;inset:0;background:rgba(2,6,12,.82);display:flex;
+   align-items:center;justify-content:center;z-index:50;padding:18px}
+ .overlay[hidden]{display:none}
+ .modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+   padding:26px;max-width:430px;width:100%}
+ .modal h2{margin:0 0 6px;font-size:18px;color:var(--ink);text-transform:none;letter-spacing:0}
+ .modal p{color:var(--mut);font-size:13px}
+ .modal input[type=password],.modal input[type=text]{width:100%;background:#010409;border:1px solid var(--line);
+   color:var(--ink);border-radius:7px;padding:11px 12px;font-size:14px;margin:6px 0}
+ .modal label.rm{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);margin:6px 0 16px}
+ .primary{background:var(--accentbg);border:1px solid var(--accentbg);color:#fff;font-weight:600;
+   border-radius:7px;padding:11px 16px;cursor:pointer;font-size:14px;width:100%}
+ .primary:hover{filter:brightness(1.1)}
+ .row-btns{display:flex;gap:10px;margin-top:20px}
+ .row-btns button{flex:1}
+ .ghost{background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+   border-radius:7px;padding:11px 16px;cursor:pointer;font-size:14px}
+ .err{color:var(--bad);font-size:13px;min-height:18px;margin-top:8px}
+ /* help drawer */
+ #help{position:fixed;top:0;right:0;height:100%;width:380px;max-width:92vw;background:var(--panel);
+   border-left:1px solid var(--line);z-index:40;padding:22px;overflow:auto;
+   transform:translateX(100%);transition:transform .2s ease}
+ #help.open{transform:translateX(0)}
+ #help h2{margin-top:0}
+ #help dt{font-weight:600;margin-top:14px}
+ #help dd{margin:2px 0 0;color:var(--mut);font-size:13px}
+ .banner{grid-column:1/-1;background:#3d1513;border:1px solid var(--bad);color:#ffb3ad;
+   border-radius:8px;padding:11px 14px;font-size:13px;display:none}
+ .banner.show{display:block}
+ .updated{font-size:11px;color:var(--idle)}
 </style></head><body>
-<h1>TradePilot SSR v1 <small id="cfg"></small></h1>
-<div class="zone"><h2>Status</h2><div class="lights" id="lights">loading...</div>
- <p>
-  <button onclick="act('pause')">Pause</button>
-  <button onclick="act('resume')">Resume</button>
-  <button class="danger" onclick="if(confirm('Flatten ALL positions now?'))act('flat-all')">Flat all</button>
-  <button class="danger" onclick="if(confirm('KILL: flatten, halt, manual re-arm. Sure?'))act('kill')">KILL</button>
- </p></div>
-<div class="zone"><h2>Risk</h2><div id="risk">...</div></div>
-<div class="zone"><h2>Open position</h2><div id="pos">...</div></div>
-<div class="zone"><h2>Today's setups &amp; decisions</h2><div id="setups">...</div></div>
-<div class="zone"><h2>Upcoming events (12h)</h2><div id="cal">...</div></div>
+
+<!-- ====================== LOGIN ====================== -->
+<div class="overlay" id="login">
+ <form class="modal" id="loginForm">
+  <h2>TradePilot SSR v1</h2>
+  <p>Autonomous FX prop-trading control panel. Enter your API access token to continue.</p>
+  <input type="password" id="tokenInput" placeholder="API token" autocomplete="off" autofocus>
+  <label class="rm"><input type="checkbox" id="remember" checked> Remember on this device</label>
+  <button type="submit" class="primary">Connect</button>
+  <div class="err" id="loginErr"></div>
+  <p class="small" style="margin-top:16px">The token is the <code>API_TOKEN</code> value set when the
+   server was started (see <code>RUNBOOK.md</code> &sect;4). It is stored only in this browser.</p>
+ </form>
+</div>
+
+<!-- ====================== APP ====================== -->
+<div id="app" hidden>
+ <header>
+  <div class="brand">TradePilot <span>SSR v1 - control panel</span></div>
+  <div class="conn"><span class="dot" id="connDot"></span><span id="connTxt">connecting...</span></div>
+  <div class="spacer"></div>
+  <span class="updated" id="updated"></span>
+  <button class="hbtn" id="helpBtn">? Help</button>
+  <button class="hbtn" id="signout">Sign out</button>
+ </header>
+
+ <main>
+  <div class="banner" id="banner"></div>
+
+  <!-- SYSTEM HEALTH -->
+  <div class="card">
+   <h2>System health</h2>
+   <p class="sub">Live readiness checks. Green means healthy; grey means no live data
+     (normal for a paper / local install with no broker feed).</p>
+   <div id="status"></div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="card">
+   <h2>Controls</h2>
+   <p class="sub">Manual overrides. Every action is logged in the audit trail.</p>
+   <div class="ctl">
+    <div class="txt"><b>Pause trading</b><small>Stop opening new trades. Open positions keep their stops &amp; targets.</small></div>
+    <button class="act" id="btnPause">Pause</button>
+   </div>
+   <div class="ctl">
+    <div class="txt"><b>Resume trading</b><small>Allow new trades again. Blocked while the kill switch is engaged.</small></div>
+    <button class="act" id="btnResume">Resume</button>
+   </div>
+   <div class="ctl">
+    <div class="txt"><b>Flatten all</b><small>Immediately close every open position at market. Trading continues.</small></div>
+    <button class="act danger" id="btnFlat">Flat all</button>
+   </div>
+   <div class="ctl">
+    <div class="txt"><b>Kill switch</b><small>Emergency stop: close everything, halt, and lock the system.
+      Re-arming requires deleting the <code>KILL</code> file on the server.</small></div>
+    <button class="act danger" id="btnKill">KILL</button>
+   </div>
+  </div>
+
+  <!-- RISK TODAY -->
+  <div class="card">
+   <h2>Risk today</h2>
+   <p class="sub">Profit / loss so far today against the safety limits that halt trading automatically.</p>
+   <div id="risk">loading...</div>
+  </div>
+
+  <!-- OPEN POSITIONS -->
+  <div class="card">
+   <h2>Open positions</h2>
+   <p class="sub">Trades the system currently holds in the market.</p>
+   <div id="pos">loading...</div>
+  </div>
+
+  <!-- SETUPS -->
+  <div class="card full">
+   <h2>Today's setups &amp; decisions</h2>
+   <p class="sub">A <b>setup</b> is a potential trade the strategy spotted. Each one passes through
+     a chain of <b>decision</b> checks (risk, news, spread...); it only becomes an order if every check passes.</p>
+   <div id="setups">loading...</div>
+  </div>
+
+  <!-- NEWS -->
+  <div class="card">
+   <h2>Upcoming high-impact news (12h)</h2>
+   <p class="sub">New entries pause automatically inside a blackout window around these events.</p>
+   <div id="cal">loading...</div>
+  </div>
+
+  <!-- LOGS -->
+  <div class="card">
+   <h2>Recent activity</h2>
+   <p class="sub">Latest events from the engine log.</p>
+   <div id="logs">loading...</div>
+  </div>
+ </main>
+</div>
+
+<!-- ====================== HELP DRAWER ====================== -->
+<aside id="help">
+ <h2>Glossary</h2>
+ <p class="mut small">Plain-English meaning of the terms used on this panel.</p>
+ <dl>
+  <dt>SSR v1</dt><dd>"Sweep / Sweep-Reclaim" strategy, version 1 - the rule set this system trades.</dd>
+  <dt>Phase</dt><dd>What the trading loop is doing right now. <code>IDLE</code> means it is not actively trading.</dd>
+  <dt>Setup</dt><dd>A pattern the strategy detected that could become a trade. Still has to pass every risk check first.</dd>
+  <dt>Decision</dt><dd>One check applied to a setup (risk budget, news blackout, spread, time window...). All must pass to place an order.</dd>
+  <dt>Paused vs Killed</dt><dd><b>Paused</b> = no new trades, existing ones still managed (reversible from here).
+    <b>Killed</b> = emergency stop, everything closed and locked; only un-locked by deleting the KILL file on the server.</dd>
+  <dt>Soft / hard stop</dt><dd>Internal daily loss limits. The soft stop slows trading; the hard stop halts it for the day - both well inside the firm's limit.</dd>
+  <dt>Consistency headroom</dt><dd>The most additional profit you may book today without breaking the firm's "no single big day" consistency rule.</dd>
+  <dt>Trailing drawdown</dt><dd>The firm's moving loss limit measured from your highest equity. Breaching it fails the account.</dd>
+  <dt>Daily loss limit</dt><dd>The firm's hard cap on how much you may lose in one day.</dd>
+  <dt>Flattener</dt><dd>An independent watchdog process that force-closes positions at session end, even if the main engine is down.</dd>
+  <dt>M5 candle</dt><dd>A 5-minute price bar - the timeframe the strategy works on.</dd>
+ </dl>
+ <button class="ghost" id="helpClose" style="width:100%;margin-top:18px">Close</button>
+</aside>
+
+<!-- ====================== CONFIRM MODAL ====================== -->
+<div class="overlay" id="confirm" hidden>
+ <div class="modal">
+  <h2 id="cfTitle"></h2>
+  <p id="cfBody"></p>
+  <div class="row-btns">
+   <button class="ghost" id="cfCancel">Cancel</button>
+   <button class="primary" id="cfOk" style="background:var(--bad);border-color:var(--bad)">Confirm</button>
+  </div>
+ </div>
+</div>
+
 <script>
-const tok = localStorage.token || (localStorage.token = prompt('API token'));
-const H = {headers: {Authorization: 'Bearer ' + tok}};
-const get = p => fetch(p, H).then(r => r.json());
-async function act(p){ await fetch('/'+p, {...H, method:'POST'}); refresh(); }
-function table(rows, cols){ if(!rows.length) return '<i>none</i>';
- return '<table><tr>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr>'+
-  rows.map(r=>'<tr>'+cols.map(c=>'<td>'+(r[c]??'')+'</td>').join('')+'</tr>').join('')+'</table>';}
+const $ = id => document.getElementById(id);
+let token = localStorage.token || '';
+
+// ---- API helper: adds auth, distinguishes auth vs network errors -------------
+async function api(path, opts){
+ const o = Object.assign({}, opts);
+ o.headers = Object.assign({Authorization: 'Bearer ' + token}, o.headers || {});
+ let res;
+ try{ res = await fetch(path, o); }
+ catch(e){ const err = new Error('network'); err.kind = 'network'; throw err; }
+ if(res.status === 401){ const err = new Error('auth'); err.kind = 'auth'; throw err; }
+ if(!res.ok){ const err = new Error('http ' + res.status); err.kind = 'http'; throw err; }
+ return res.json();
+}
+
+// ---- login -------------------------------------------------------------------
+$('loginForm').addEventListener('submit', async e => {
+ e.preventDefault();
+ const v = $('tokenInput').value.trim();
+ if(!v){ $('loginErr').textContent = 'Enter a token.'; return; }
+ token = v; $('loginErr').textContent = 'Checking...';
+ try{
+  await api('/state');
+  if($('remember').checked) localStorage.token = token; else localStorage.removeItem('token');
+  $('login').style.display = 'none'; $('app').hidden = false;
+  refresh(); if(!timer) timer = setInterval(refresh, 5000);
+ }catch(err){
+  $('loginErr').textContent = err.kind === 'auth'
+    ? 'Token rejected. Check the API_TOKEN on the server.'
+    : 'Cannot reach the server. Is it running?';
+ }
+});
+function showLogin(msg){
+ $('app').hidden = true; $('login').style.display = 'flex';
+ $('tokenInput').value = ''; $('loginErr').textContent = msg || '';
+ if(timer){ clearInterval(timer); timer = null; }
+}
+$('signout').onclick = () => { localStorage.removeItem('token'); token = ''; showLogin(''); };
+
+// ---- help drawer & confirm modal --------------------------------------------
+$('helpBtn').onclick = () => $('help').classList.add('open');
+$('helpClose').onclick = () => $('help').classList.remove('open');
+let pending = null;
+function ask(title, body, fn){
+ $('cfTitle').textContent = title; $('cfBody').textContent = body;
+ pending = fn; $('confirm').hidden = false;
+}
+$('cfCancel').onclick = () => { $('confirm').hidden = true; pending = null; };
+$('cfOk').onclick = async () => { $('confirm').hidden = true; const f = pending; pending = null; if(f) await f(); };
+
+async function post(path){
+ try{ await api('/' + path, {method:'POST'}); }
+ catch(err){ if(err.kind === 'auth') return showLogin('Session expired - sign in again.'); }
+ refresh();
+}
+$('btnPause').onclick  = () => post('pause');
+$('btnResume').onclick = () => post('resume');
+$('btnFlat').onclick   = () => ask('Flatten all positions?',
+  'This immediately closes every open position at market price. The system keeps trading afterwards.',
+  () => post('flat-all'));
+$('btnKill').onclick   = () => ask('Engage the kill switch?',
+  'Emergency stop: closes everything, halts trading, and locks the system. Re-arming is deliberate - '
+  + 'someone must delete the KILL file on the server and then press Resume. An API call alone cannot undo this.',
+  () => post('kill'));
+
+// ---- formatting helpers ------------------------------------------------------
+const num = v => v == null ? null : Number(v);
+const money = v => { const n = num(v); if(n == null || isNaN(n)) return 'n/a';
+ return (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString(undefined,{maximumFractionDigits:2}); };
+const age = v => v == null ? '-' : v < 60 ? Math.round(v) + 's'
+ : v < 3600 ? (v/60).toFixed(1) + 'm' : (v/3600).toFixed(1) + 'h';
+const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const shortId = s => s ? esc(String(s).slice(0,8)) : '-';
+
+// ---- system health -----------------------------------------------------------
+function renderStatus(h, s){
+ const ok = b => b ? 'ok' : 'bad';
+ const items = [
+  ['Engine phase', esc(s.phase || '-'), s.phase && s.phase !== 'IDLE' ? 'ok' : 'idle',
+   'The high-level stage of the trading loop. IDLE means it is not actively trading right now.'],
+  ['Broker feed', h.broker_connected ? 'Connected' : 'Disconnected', ok(h.broker_connected),
+   'Live price &amp; execution link to the broker terminal (MT5). Required before any real trade.'],
+  ['Price ticks', age(h.tick_age_s), h.tick_age_s == null ? 'idle' : h.tick_age_s < 10 ? 'ok' : 'bad',
+   'Time since the last price update. Healthy when under 10 seconds.'],
+  ['M5 candles', age(h.bar_age_s), h.bar_age_s == null ? 'idle' : h.bar_age_s < 420 ? 'ok' : 'bad',
+   'Time since the last 5-minute candle closed. Healthy when under 7 minutes.'],
+  ['Clock sync', h.ntp_offset_s == null ? '-' : h.ntp_offset_s + 's',
+   h.ntp_offset_s == null ? 'idle' : Math.abs(h.ntp_offset_s) < 2 ? 'ok' : 'bad',
+   'System clock drift versus internet time. Must stay within 2 seconds for accurate timing.'],
+  ['Safety flattener', age(h.flattener_heartbeat_age_s),
+   h.flattener_heartbeat_age_s == null ? 'idle' : h.flattener_heartbeat_age_s < 1200 ? 'ok' : 'bad',
+   'Heartbeat of the independent watchdog that force-closes positions at session end. Under 20 minutes is healthy.'],
+  ['Trading state', s.paused ? 'Paused' : 'Active', s.paused ? 'warn' : 'ok',
+   s.paused ? 'New entries are paused; open positions are still managed.'
+            : 'The system may open new trades when a valid setup appears.'],
+  ['Kill switch', s.killed ? 'ENGAGED' : 'Armed - OK', s.killed ? 'bad' : 'ok',
+   s.killed ? 'Emergency stop is active: flat and halted. Delete the KILL file on the server, then Resume.'
+            : 'Not engaged. The system is allowed to run.'],
+ ];
+ $('status').innerHTML = items.map(([t, v, st, mn]) =>
+  '<div class="srow"><span class="dot ' + st + '"></span><div class="body">'
+  + '<div class="top"><span class="ttl">' + t + '</span><span class="val ' + st + '">' + v + '</span></div>'
+  + '<div class="mn">' + mn + '</div></div></div>').join('');
+}
+
+// ---- risk --------------------------------------------------------------------
+function renderRisk(r){
+ const realized = num(r.day_realized) || 0;
+ const hard = Math.abs(num(r.internal_day_hard_stop) || 0);
+ const soft = Math.abs(num(r.internal_day_soft_stop) || 0);
+ const lossUsed = realized < 0 ? -realized : 0;
+ const pct = hard ? Math.min(100, lossUsed / hard * 100) : 0;
+ const softPct = hard ? Math.min(100, soft / hard * 100) : 0;
+ const profit = realized >= 0;
+ const barColor = pct >= 100 ? 'var(--bad)' : pct >= softPct ? 'var(--warn)' : 'var(--ok)';
+ let bar = '';
+ if(!profit && hard){
+  bar = '<div class="bar"><i style="width:' + pct.toFixed(0) + '%;background:' + barColor + '"></i>'
+   + '<span style="position:absolute;left:' + softPct.toFixed(0) + '%;top:-2px;bottom:-2px;width:2px;background:var(--ink);opacity:.5"></span>'
+   + '</div><div class="small mut">Daily loss used: ' + money(-lossUsed) + ' of hard stop '
+   + money(-hard) + ' (soft stop ' + money(-soft) + ' marked).</div>';
+ } else {
+  bar = '<div class="small mut" style="margin-top:8px">In profit. Internal daily safety stops: soft '
+   + money(num(r.internal_day_soft_stop)) + ', hard ' + money(num(r.internal_day_hard_stop)) + '.</div>';
+ }
+ const halt = r.halted
+  ? '<div class="chip" style="border-color:var(--bad);color:var(--bad)"><b>HALTED</b>' + esc(r.halt_reason || 'risk limit') + '</div>'
+  : '';
+ $('risk').innerHTML =
+  '<div class="big ' + (realized < 0 ? 'neg-num' : 'pos-num') + '">' + money(realized) + '</div>'
+  + '<div class="small mut">Realized P&amp;L today' + (num(r.day_fees) ? ' (fees ' + money(r.day_fees) + ')' : '') + '</div>'
+  + bar
+  + '<div class="chips">'
+  + '<div class="chip">Trades today<b>' + (r.trades_today ?? 0) + '</b></div>'
+  + '<div class="chip">Consecutive losses<b>' + (r.consec_losses ?? 0) + '</b></div>'
+  + '<div class="chip" title="Most additional profit allowed today under the firm consistency rule.">Consistency headroom<b>'
+  + money(r.consistency_headroom) + '</b></div>'
+  + '<div class="chip">Account equity<b>' + money(r.equity) + '</b></div>'
+  + halt + '</div>'
+  + '<div class="kv"><span>Firm daily-loss limit ' + money(r.firm_daily_loss_limit) + '</span>'
+  + '<span>Firm trailing drawdown ' + money(r.firm_trailing_dd) + '</span></div>';
+}
+
+// ---- positions ---------------------------------------------------------------
+function renderPositions(rows){
+ if(!rows.length){ $('pos').innerHTML = '<div class="empty">No open positions - the system is flat.</div>'; return; }
+ $('pos').innerHTML = '<table><thead><tr>'
+  + '<th>Symbol</th><th>Side</th><th>Lots</th><th>Entry</th><th>Stop</th><th>Target</th><th>Unrealized</th></tr></thead><tbody>'
+  + rows.map(p => { const u = num(p.unrealized_pnl);
+   return '<tr><td>' + esc(p.symbol) + '</td>'
+    + '<td><span class="badge ' + (p.side === 'long' ? 'long' : 'short') + '">' + esc(p.side) + '</span></td>'
+    + '<td>' + esc(p.lots) + '</td><td>' + esc(p.entry_price) + '</td>'
+    + '<td>' + esc(p.sl) + '</td><td>' + esc(p.tp) + '</td>'
+    + '<td class="' + (u < 0 ? 'neg-num' : 'pos-num') + '">' + money(p.unrealized_pnl) + '</td></tr>'; }).join('')
+  + '</tbody></table>';
+}
+
+// ---- setups & decisions ------------------------------------------------------
+async function renderSetups(){
+ const today = new Date().toISOString().slice(0,10);
+ const setups = await api('/setups?date=' + today);
+ if(!setups.length){
+  $('setups').innerHTML = '<div class="empty">No setups detected today yet.</div>'; return;
+ }
+ const parts = [];
+ for(const s of setups){
+  const ds = await api('/decisions?setup_id=' + encodeURIComponent(s.id)).catch(() => []);
+  const dir = s.direction === 'long' ? 'long' : s.direction === 'short' ? 'short' : 'neu';
+  parts.push('<div style="margin-bottom:14px">'
+   + '<div style="margin-bottom:6px"><code>' + shortId(s.id) + '</code> '
+   + esc(s.symbol || '') + ' <span class="badge ' + dir + '">' + esc(s.direction || '-') + '</span> '
+   + '<span class="badge neu">' + esc(s.status || '') + '</span></div>'
+   + (ds.length
+      ? '<table><thead><tr><th>Check</th><th>Result</th><th>Reason</th></tr></thead><tbody>'
+        + ds.map(d => '<tr><td>' + esc(d.stage) + '</td>'
+          + '<td class="' + (d.passed ? 'pass' : 'fail') + '">' + (d.passed ? 'pass' : 'fail') + '</td>'
+          + '<td class="mut">' + esc(d.reason_code) + '</td></tr>').join('')
+        + '</tbody></table>'
+      : '<div class="small mut">No decision checks recorded yet.</div>')
+   + '</div>');
+ }
+ $('setups').innerHTML = parts.join('');
+}
+
+// ---- news --------------------------------------------------------------------
+function renderCalendar(rows){
+ if(!rows.length){ $('cal').innerHTML = '<div class="empty">No high-impact news in the next 12 hours.</div>'; return; }
+ $('cal').innerHTML = '<table><thead><tr><th>Time (UTC)</th><th>Ccy</th><th>Impact</th><th>Event</th></tr></thead><tbody>'
+  + rows.map(e => '<tr><td>' + esc(String(e.ts_utc).replace('T',' ').slice(0,16)) + '</td>'
+    + '<td>' + esc(e.currency) + '</td><td>' + esc(e.impact) + '</td><td>' + esc(e.title) + '</td></tr>').join('')
+  + '</tbody></table>';
+}
+
+// ---- logs --------------------------------------------------------------------
+function renderLogs(rows){
+ if(!rows.length){ $('logs').innerHTML = '<div class="empty">No recent activity.</div>'; return; }
+ $('logs').innerHTML = '<table><tbody>'
+  + rows.slice(-12).reverse().map(l => '<tr><td class="mut" style="white-space:nowrap">'
+    + esc(String(l.ts_utc).replace('T',' ').slice(11,19)) + '</td>'
+    + '<td class="lvl-' + esc((l.level||'').toLowerCase()) + '" style="text-transform:uppercase">' + esc(l.level) + '</td>'
+    + '<td>' + esc(l.message) + '</td></tr>').join('')
+  + '</tbody></table>';
+}
+
+// ---- buttons enable/disable per state ----------------------------------------
+function syncControls(s){
+ $('btnPause').disabled  = s.paused || s.killed;
+ $('btnResume').disabled = (!s.paused && !s.killed) || s.killed;
+ $('btnResume').title = s.killed ? 'Blocked: delete the KILL file on the server first.' : '';
+}
+
+// ---- main refresh ------------------------------------------------------------
+let timer = null;
 async function refresh(){
  try{
-  const [h, s, r, pos, cal] = await Promise.all([
-    get('/health'), get('/state'), get('/risk'), get('/positions'), get('/calendar/next')]);
-  document.getElementById('cfg').textContent = 'config ' + (s.config_checksum||'').slice(0,12);
-  const light=(name, ok)=>'<span class="'+(ok?'ok':'bad')+'">&#9679; '+name+'</span>';
-  document.getElementById('lights').innerHTML =
-    light('broker', h.broker_connected) + light('tick '+h.tick_age_s+'s', h.tick_age_s < 10) +
-    light('bar '+h.bar_age_s+'s', h.bar_age_s < 420) + light('ntp', Math.abs(h.ntp_offset_s||0) < 2) +
-    light('flattener', h.flattener_heartbeat_age_s < 1200) +
-    light(s.paused ? 'PAUSED' : 'active', !s.paused) + light(s.killed ? 'KILLED' : 'armed-ok', !s.killed) +
-    '<span>phase: '+s.phase+'</span>';
-  document.getElementById('risk').innerHTML =
-    'day P&amp;L <b>'+r.day_realized+'</b> (soft '+r.internal_day_soft_stop+' / hard '+r.internal_day_hard_stop+')'+
-    ' | trades '+r.trades_today+' | consec losses '+r.consec_losses+
-    ' | headroom '+r.consistency_headroom+' | equity '+(r.equity||'n/a');
-  document.getElementById('pos').innerHTML = table(pos, ['ticket','symbol','side','lots','entry_price','sl','tp','unrealized_pnl']);
-  document.getElementById('cal').innerHTML = table(cal, ['ts_utc','currency','impact','title']);
-  const today = new Date().toISOString().slice(0,10);
-  const setups = await get('/setups?date='+today);
-  let html = table(setups, ['id','direction','status']);
-  for(const s2 of setups){
-    const ds = await get('/decisions?setup_id='+encodeURIComponent(s2.id));
-    html += table(ds, ['stage','passed','reason_code']);
-  }
-  document.getElementById('setups').innerHTML = html;
- }catch(e){ document.getElementById('lights').innerHTML='<span class="bad">API error: '+e+'</span>'; }
+  const [h, s, r, pos, cal, logs] = await Promise.all([
+   api('/health'), api('/state'), api('/risk'), api('/positions'),
+   api('/calendar/next'), api('/logs')]);
+  $('banner').classList.remove('show');
+  $('connDot').className = 'dot ok'; $('connTxt').textContent =
+   'Connected - config ' + (s.config_checksum || '').slice(0,12);
+  $('updated').textContent = 'updated ' + new Date().toLocaleTimeString();
+  renderStatus(h, s); renderRisk(r); renderPositions(pos);
+  renderCalendar(cal); renderLogs(logs); syncControls(s);
+  await renderSetups();
+ }catch(err){
+  if(err.kind === 'auth') return showLogin('Session expired - sign in again.');
+  $('connDot').className = 'dot bad'; $('connTxt').textContent = 'Disconnected';
+  $('banner').textContent = 'Cannot reach the server. Retrying every 5 seconds...';
+  $('banner').classList.add('show');
+ }
 }
-refresh(); setInterval(refresh, 5000);
+
+// ---- boot --------------------------------------------------------------------
+if(token){ $('login').style.display = 'none'; $('app').hidden = false;
+ refresh(); timer = setInterval(refresh, 5000); }
 </script></body></html>
 """
 
