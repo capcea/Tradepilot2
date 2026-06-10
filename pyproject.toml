@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tradepilot"
+version = "0.1.0"
+description = "Autonomous FX prop-trading system (SSR v1) - see SPEC.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.7",
+  "PyYAML>=6.0.1",
+  "tzdata>=2024.1",
+  "fastapi>=0.111",
+  "uvicorn>=0.30",
+  "SQLAlchemy>=2.0",
+  "pandas>=2.2",
+  "numpy>=1.26",
+  "structlog>=24.1",
+  "APScheduler>=3.10",
+  "httpx>=0.27",
+  'MetaTrader5>=5.0.45; platform_system == "Windows"',
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2", "hypothesis>=6.100"]
+
+[tool.setuptools.packages.find]
+include = ["core*", "ports*", "adapters*", "services*", "backtest*", "api*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"

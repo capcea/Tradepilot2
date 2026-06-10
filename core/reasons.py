@@ -1,0 +1,52 @@
+"""Every reason code in one module (build brief non-negotiable).
+
+Every skipped setup, halt, veto and ops block references exactly one of these.
+The absence of a trade is evidence, not silence (SPEC.md §18).
+"""
+from enum import Enum
+
+
+class ReasonCode(str, Enum):
+    # news (§6.1, §6.2)
+    NEWS_BLACKOUT = "NEWS_BLACKOUT"
+    NEWS_LOOKAHEAD = "NEWS_LOOKAHEAD"
+    # market state (§6.3, §6.4, §6.5)
+    SPREAD_GATE = "SPREAD_GATE"
+    RANGE_TOO_NARROW = "RANGE_TOO_NARROW"
+    RANGE_TOO_WIDE = "RANGE_TOO_WIDE"
+    DATA_INCOMPLETE = "DATA_INCOMPLETE"
+    ADR_REGIME_LOW = "ADR_REGIME_LOW"
+    ADR_REGIME_HIGH = "ADR_REGIME_HIGH"
+    # risk/compliance halts (§6.6, §7)
+    DAILY_SOFT_STOP = "DAILY_SOFT_STOP"
+    DAILY_HARD_STOP = "DAILY_HARD_STOP"
+    WEEKLY_STOP = "WEEKLY_STOP"
+    CONSEC_LOSS_HALT = "CONSEC_LOSS_HALT"
+    CONSISTENCY_CAP = "CONSISTENCY_CAP"
+    FLOOR_BUFFER = "FLOOR_BUFFER"
+    MAX_ENTRIES = "MAX_ENTRIES"
+    # session/calendar (§6.7, §6.8, §6.9)
+    BANK_HOLIDAY = "BANK_HOLIDAY"
+    ROLLOVER_WINDOW = "ROLLOVER_WINDOW"
+    FRIDAY_LATE = "FRIDAY_LATE"
+    MONDAY_GAP = "MONDAY_GAP"
+    DST_ANOMALY = "DST_ANOMALY"
+    OUTSIDE_ENTRY_WINDOW = "OUTSIDE_ENTRY_WINDOW"
+    # ops (§6.10, §6.11, §6.12)
+    OPS_UNHEALTHY = "OPS_UNHEALTHY"
+    KILLED = "KILLED"
+    PAUSED = "PAUSED"
+    SYMBOL_INVALID = "SYMBOL_INVALID"
+    POSITION_OPEN = "POSITION_OPEN"
+    # setup structure (§4, §5)
+    SWEEP_TOO_DEEP = "SWEEP_TOO_DEEP"
+    NO_RECLAIM = "NO_RECLAIM"
+    RECLAIM_QUALITY = "RECLAIM_QUALITY"
+    STOP_OOB = "STOP_OOB"
+    TARGET_STRUCTURE_INVALID = "TARGET_STRUCTURE_INVALID"
+    DIRECTION_ALREADY_ATTEMPTED = "DIRECTION_ALREADY_ATTEMPTED"
+    # sizing/execution (§7, §10.5)
+    SIZE_BELOW_MIN_LOT = "SIZE_BELOW_MIN_LOT"
+    MARGIN_INSUFFICIENT = "MARGIN_INSUFFICIENT"
+    ORDER_REJECTED = "ORDER_REJECTED"
+    RATE_LIMITED = "RATE_LIMITED"

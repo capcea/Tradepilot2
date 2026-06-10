@@ -1,0 +1,15 @@
+# Firm profile — rules as data (SPEC.md §8). Verify every field against the firm's current ToS.
+firm_profile:
+  name: "ExampleFunding 50k"
+  account_size: 50000
+  profit_target: 3000
+  trailing_dd: {amount: 2500, mode: intraday_equity}   # intraday_equity | eod_balance | static
+  daily_loss: {amount: 1250, basis: equity_incl_floating, reset: "17:00 America/New_York"}
+  consistency_pct: 40                # null if none
+  min_trading_days: 5
+  news_rule: {blackout_pre_min: 5, blackout_post_min: 5, profits_voided: true}
+  overnight_allowed: false
+  weekend_allowed: false
+  max_lots: 10
+  ea_policy: {allowed: true, requires_disclosure: true, copy_trading_banned: true}
+  payout: {first_after_days: 14, split_pct: 80}

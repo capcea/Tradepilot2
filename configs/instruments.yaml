@@ -1,0 +1,24 @@
+# Instrument specs with broker symbol-variant mapping (SPEC.md §10.4, §11 instrument table).
+# Boot-time validation compares digits/point/contract_size against the live symbol_info;
+# a mismatch refuses the symbol, never "fixes" it.
+instruments:
+  EURUSD:
+    broker_symbols: [EURUSD, EURUSD.pro, EURUSDm]
+    digits: 5
+    point: 0.00001
+    pip: 0.0001
+    contract_size: 100000
+    quote_ccy: USD
+    min_lot: 0.01
+    lot_step: 0.01
+    max_lot: 100
+  GBPUSD:
+    broker_symbols: [GBPUSD, GBPUSD.pro, GBPUSDm]
+    digits: 5
+    point: 0.00001
+    pip: 0.0001
+    contract_size: 100000
+    quote_ccy: USD
+    min_lot: 0.01
+    lot_step: 0.01
+    max_lot: 100

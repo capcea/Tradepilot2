@@ -1,0 +1,49 @@
+# SSR v1 Backtest Report
+
+- **symbols**: EURUSD GBPUSD
+- **period**: 2018-01-01 .. 2026-06-05
+- **days_run**: 2193
+- **label**: campaign_stress_slippage
+
+## Headline metrics
+
+- Trades: 669
+- Win rate: 0.4798
+- Expectancy (R): -0.2872
+- Profit factor (R, after costs): 0.5118
+- Avg win (R): 0.6276
+- Avg loss (R): -1.1310
+- Net P&L: $-33285.44
+- Max equity drawdown: $33606.97
+- Time under water (days): 2947
+- Daily concentration (max day / net): n/a
+- Trades/active-day histogram: {1: 516, 2: 72, 3: 3}
+
+## Per-year breakdown
+
+| Year | Trades | Net $ | Expectancy R | PF | Win rate |
+|---|---|---|---|---|---|
+| 2018 | 76 | -4826.30 | -0.3643 | 0.4414 | 0.4737 |
+| 2019 | 56 | -3287.04 | -0.3359 | 0.4335 | 0.4643 |
+| 2020 | 143 | -8570.06 | -0.3433 | 0.4745 | 0.4545 |
+| 2021 | 65 | -649.50 | -0.0559 | 0.8752 | 0.5692 |
+| 2022 | 92 | -2881.07 | -0.1770 | 0.6798 | 0.5435 |
+| 2023 | 71 | -2729.11 | -0.2203 | 0.5776 | 0.4930 |
+| 2024 | 43 | -3610.06 | -0.5023 | 0.2430 | 0.3256 |
+| 2025 | 86 | -4478.00 | -0.3044 | 0.4507 | 0.5000 |
+| 2026 | 37 | -2254.28 | -0.3569 | 0.4543 | 0.4054 |
+
+## Evaluation-pass Monte Carlo (§13.6)
+
+- Simulations: 10000
+- Pass probability per attempt: 0.0000
+- Busts: 3530  |  Timeouts: 6470
+- Expected attempts: n/a
+- Days to pass (p25/median/p75): None / None / None
+
+## Caveats (read before believing anything above)
+
+- NEWS BLACKOUT INACTIVE: no historical high-impact calendar available; filter ran against an empty calendar. Treat results as un-news-filtered.
+- Bank-holiday filter inactive (no historical holiday source); thin-range days are partially caught by the range filters.
+- Dukascopy M1-candle-built M5 bars; wicks differ from any specific broker feed (SPEC §13.1 caveat). Re-run signal match on broker M1 before live.
+- Costs: slip_in=1.0p slip_out=1.5p commission=$7/lot RT, variable spread from data.

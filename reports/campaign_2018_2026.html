@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset='utf-8'><title>SSR v1 Backtest Report</title><style>body{font-family:monospace;max-width:900px;margin:2em auto;white-space:pre-wrap}</style></head><body># SSR v1 Backtest Report
+
+- **symbols**: EURUSD GBPUSD
+- **period**: 2018-01-01 .. 2026-06-05
+- **days_run**: 2193
+- **label**: campaign_2018_2026
+
+## Headline metrics
+
+- Trades: 669
+- Win rate: 0.4993
+- Expectancy (R): -0.1322
+- Profit factor (R, after costs): 0.7409
+- Avg win (R): 0.7568
+- Avg loss (R): -1.0246
+- Net P&amp;L: $-15360.45
+- Max equity drawdown: $15795.86
+- Time under water (days): 2947
+- Daily concentration (max day / net): n/a
+- Trades/active-day histogram: {1: 516, 2: 72, 3: 3}
+
+## Per-year breakdown
+
+| Year | Trades | Net $ | Expectancy R | PF | Win rate |
+|---|---|---|---|---|---|
+| 2018 | 76 | -2769.30 | -0.2091 | 0.6335 | 0.4737 |
+| 2019 | 56 | -1618.35 | -0.1643 | 0.6790 | 0.4821 |
+| 2020 | 143 | -5038.66 | -0.1986 | 0.6536 | 0.4545 |
+| 2021 | 65 | 1073.39 | 0.0965 | 1.2526 | 0.6154 |
+| 2022 | 92 | -375.28 | -0.0203 | 0.9589 | 0.5652 |
+| 2023 | 71 | -927.62 | -0.0749 | 0.8317 | 0.5070 |
+| 2024 | 43 | -2346.72 | -0.3298 | 0.4036 | 0.3953 |
+| 2025 | 86 | -2175.41 | -0.1494 | 0.6877 | 0.5233 |
+| 2026 | 37 | -1182.51 | -0.1888 | 0.6573 | 0.4324 |
+
+## Evaluation-pass Monte Carlo (§13.6)
+
+- Simulations: 10000
+- Pass probability per attempt: 0.0000
+- Busts: 1000  |  Timeouts: 9000
+- Expected attempts: n/a
+- Days to pass (p25/median/p75): None / None / None
+
+## Caveats (read before believing anything above)
+
+- NEWS BLACKOUT INACTIVE: no historical high-impact calendar available; filter ran against an empty calendar. Treat results as un-news-filtered.
+- Bank-holiday filter inactive (no historical holiday source); thin-range days are partially caught by the range filters.
+- Dukascopy M1-candle-built M5 bars; wicks differ from any specific broker feed (SPEC §13.1 caveat). Re-run signal match on broker M1 before live.
+- Costs: slip_in=0.3p slip_out=0.4p commission=$7/lot RT, variable spread from data.
+</body></html>

@@ -1,0 +1,18 @@
+# SSR v1 strategy config — defaults per SPEC.md Appendix A. Versioned via checksum (SPEC §8c).
+strategy: ssr_v1
+pairs:
+  # stop_buffer_pips comes from SPEC §3.1 (2/3 pips + current spread); Appendix A omits it
+  EURUSD: {range_min_pips: 10, sweep_min_pips: 2, stop_min: 7, stop_max: 22,
+           spread_abs_cap: 1.2, max_deviation: 1.5, stop_buffer_pips: 2}
+  GBPUSD: {range_min_pips: 13, sweep_min_pips: 3, stop_min: 9, stop_max: 28,
+           spread_abs_cap: 1.8, max_deviation: 2.0, stop_buffer_pips: 3}
+shared: {range_max_adr_mult: 0.60, sweep_max_range_mult: 0.60, reclaim_bars: 6,
+         reclaim_quality_pct: 0.40, tp1_r: 1.0, tp1_close: 0.5, tp2_r_cap: 2.2,
+         time_stop_min: 90, forced_exit_london: "19:30",
+         entry_window_london: ["07:05", "10:30"], asian_window_london: ["00:00", "06:55"],
+         spread_median_mult: 1.8, adr_pctile_skip: [25, 90]}
+risk: {per_trade_usd: 175, cooldown_usd: 125, day_soft_stop: -350, day_hard_stop: -600,
+       week_stop: -1200, consec_loss_halt: 2, max_entries_day: 3, max_concurrent: 1,
+       consistency_day_cap: 700, floor_buffer: 800}
+news: {pre_min: 10, post_min: 20, lookahead_block_min: 30,
+       currencies: {EURUSD: [EUR, USD], GBPUSD: [GBP, USD]}}
