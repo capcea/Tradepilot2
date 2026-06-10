@@ -9,6 +9,7 @@ Run:  python -m api.app  (binds 127.0.0.1 only; set API_TOKEN env var)
 from __future__ import annotations
 
 import json
+import os
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
@@ -23,6 +24,7 @@ from fastapi.responses import HTMLResponse
 from api.auth import make_token_dependency
 from core.config_schema import (
     FirmProfile,
+    InstrumentsConfig,
     StartupValidationError,
     StrategyConfig,
     risk_reduction_only,
@@ -58,6 +60,10 @@ class ApiContext:
     kill_file: Path
     alerts: object
     status_provider: Callable[[], dict]
+    strategy_yaml_path: Path = field(default_factory=lambda: Path("configs/strategy.yaml"))
+    firm_yaml_path: Path = field(default_factory=lambda: Path("configs/firm_profile.yaml"))
+    instruments_yaml_path: Path = field(default_factory=lambda: Path("configs/instruments.yaml"))
+    env_file_path: Path = field(default_factory=lambda: Path(".env"))
     paused: bool = False
     in_evaluation: bool = True
     log_buffer: deque = field(default_factory=lambda: deque(maxlen=2000))
@@ -75,6 +81,30 @@ class ApiContext:
         self.store.append_audit(
             self.clock.now_utc(), actor, event, json.dumps(payload or {}, default=_s)
         )
+
+
+_ENV_KEYS = ["MT5_LOGIN", "MT5_PASSWORD", "MT5_SERVER", "MT5_TERMINAL_PATH", "LIVE_TRADING", "STATE_DB"]
+_SECRET_KEYS = {"MT5_PASSWORD"}
+
+
+def _write_env_file(env_file: Path, updates: dict) -> None:
+    existing: dict[str, str] = {}
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, _, v = line.partition("=")
+                existing[k.strip()] = v.strip()
+    for k, v in updates.items():
+        if v:
+            existing[k] = v
+        else:
+            existing.pop(k, None)
+    lines = ["# TradePilot environment — managed by the settings UI"]
+    for k in _ENV_KEYS:
+        if k in existing:
+            lines.append(f"{k}={existing[k]}")
+    env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def create_app(ctx: ApiContext, token: str) -> FastAPI:
@@ -268,6 +298,77 @@ def create_app(ctx: ApiContext, token: str) -> FastAPI:
         ctx.audit(author, "config_activated", {"checksum": checksum})
         return {"checksum": checksum}
 
+    @app.get("/config/strategy", dependencies=[auth])
+    def get_strategy_yaml():
+        try:
+            return {"yaml": ctx.strategy_yaml_path.read_text(encoding="utf-8")}
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.get("/config/firm", dependencies=[auth])
+    def get_firm_yaml():
+        try:
+            return {"yaml": ctx.firm_yaml_path.read_text(encoding="utf-8")}
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.post("/config/firm", dependencies=[auth])
+    def post_firm_config(payload: dict = Body(...)):
+        raw = payload.get("yaml", "")
+        author = payload.get("author", "unknown")
+        try:
+            data = yaml.safe_load(raw)
+            if not isinstance(data, dict) or "firm_profile" not in data:
+                raise ValueError("missing 'firm_profile' root key")
+            new_firm = FirmProfile.model_validate(data["firm_profile"])
+            validate_startup(ctx.strategy, new_firm)
+        except (yaml.YAMLError, ValueError, StartupValidationError) as exc:
+            raise HTTPException(status_code=422, detail=f"firm profile rejected: {exc}") from exc
+        ctx.firm_yaml_path.write_text(raw, encoding="utf-8")
+        ctx.firm = new_firm
+        ctx.audit(author, "firm_config_saved")
+        return {"ok": True}
+
+    @app.get("/config/instruments", dependencies=[auth])
+    def get_instruments_yaml():
+        try:
+            return {"yaml": ctx.instruments_yaml_path.read_text(encoding="utf-8")}
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.post("/config/instruments", dependencies=[auth])
+    def post_instruments_config(payload: dict = Body(...)):
+        raw = payload.get("yaml", "")
+        author = payload.get("author", "unknown")
+        try:
+            data = yaml.safe_load(raw)
+            new_instruments = InstrumentsConfig.model_validate(data)
+            validate_startup(ctx.strategy, ctx.firm, new_instruments)
+        except (yaml.YAMLError, ValueError, StartupValidationError) as exc:
+            raise HTTPException(status_code=422, detail=f"instruments config rejected: {exc}") from exc
+        ctx.instruments_yaml_path.write_text(raw, encoding="utf-8")
+        ctx.audit(author, "instruments_config_saved")
+        return {"ok": True, "restart_required": True}
+
+    @app.get("/config/env", dependencies=[auth])
+    def get_env_config():
+        result = {}
+        for k in _ENV_KEYS:
+            v = os.environ.get(k)
+            if v is not None and k in _SECRET_KEYS:
+                result[k] = {"set": True, "value": None}
+            else:
+                result[k] = {"set": v is not None, "value": v}
+        return result
+
+    @app.post("/config/env", dependencies=[auth])
+    def post_env_config(payload: dict = Body(...)):
+        author = payload.get("author", "unknown")
+        updates = {k: payload[k] for k in _ENV_KEYS if k in payload}
+        _write_env_file(ctx.env_file_path, updates)
+        ctx.audit(author, "env_saved", {"keys": [k for k in updates if k not in _SECRET_KEYS]})
+        return {"ok": True, "restart_required": True}
+
     return app
 
 
@@ -403,6 +504,48 @@ DASHBOARD_HTML = """<!doctype html>
    border-radius:8px;padding:11px 14px;font-size:13px;display:none}
  .banner.show{display:block}
  .updated{font-size:11px;color:var(--idle)}
+ /* settings modal */
+ #sm-ov{position:fixed;inset:0;background:rgba(2,6,12,.82);display:flex;
+   align-items:center;justify-content:center;z-index:50;padding:18px}
+ #sm-ov[hidden]{display:none}
+ .sm{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+   max-width:720px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+ .sm-hdr{padding:16px 20px 0;border-bottom:1px solid var(--line)}
+ .sm-hdr h2{margin:0 0 12px;font-size:16px;text-transform:none;letter-spacing:0;color:var(--ink)}
+ .sm-tabs{display:flex;margin:0 -20px;padding:0 20px}
+ .sm-tab{background:none;border:none;color:var(--mut);padding:8px 13px;cursor:pointer;font-size:12px;
+   border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:500;letter-spacing:.02em}
+ .sm-tab.on{color:var(--ink);border-bottom-color:var(--accent)}
+ .sm-body{padding:18px 20px;overflow-y:auto;flex:1}
+ .sm-foot{padding:12px 20px;border-top:1px solid var(--line);display:flex;gap:10px;align-items:center}
+ .tp{display:none}.tp.on{display:block}
+ .fld{margin-bottom:14px}
+ .fld label{display:block;font-size:11px;color:var(--mut);margin-bottom:4px;font-weight:600;
+   text-transform:uppercase;letter-spacing:.05em}
+ .fld input[type=text],.fld input[type=password]{width:100%;background:#010409;
+   border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:8px 11px;font-size:13px}
+ .fld input:focus{border-color:var(--accent);outline:none}
+ .fld .ht{font-size:11px;color:var(--idle);margin-top:2px}
+ .fld-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+ .ya{width:100%;background:#010409;border:1px solid var(--line);color:var(--ink);
+   border-radius:6px;padding:10px 12px;font-size:12px;font-family:monospace;
+   min-height:260px;resize:vertical}
+ .ya:focus{border-color:var(--accent);outline:none}
+ .tgl-row{display:flex;align-items:center;justify-content:space-between;
+   padding:10px 0;border-top:1px solid var(--line)}
+ .tgl-row .ti b{display:block;font-size:13px}
+ .tgl-row .ti small{color:var(--mut);font-size:11px}
+ .tgl{position:relative;display:inline-block;width:40px;height:22px}
+ .tgl input{opacity:0;width:0;height:0}
+ .sl{position:absolute;cursor:pointer;inset:0;background:#2a313c;border-radius:22px;transition:.2s}
+ .sl:before{position:absolute;content:"";height:16px;width:16px;left:3px;bottom:3px;
+   background:var(--mut);border-radius:50%;transition:.2s}
+ input:checked+.sl{background:var(--accentbg)}
+ input:checked+.sl:before{transform:translateX(18px);background:#fff}
+ .smsg{font-size:12px;flex:1}
+ .smsg.ok{color:var(--ok)}.smsg.bad{color:var(--bad)}
+ .rn{background:#1c2a3a;border:1px solid #2d4a6b;color:#89b4e0;border-radius:6px;
+   padding:7px 11px;font-size:12px;margin-bottom:14px}
 </style></head><body>
 
 <!-- ====================== LOGIN ====================== -->
@@ -426,6 +569,7 @@ DASHBOARD_HTML = """<!doctype html>
   <div class="conn"><span class="dot" id="connDot"></span><span id="connTxt">connecting...</span></div>
   <div class="spacer"></div>
   <span class="updated" id="updated"></span>
+  <button class="hbtn" id="settingsBtn">&#9881; Settings</button>
   <button class="hbtn" id="helpBtn">? Help</button>
   <button class="hbtn" id="signout">Sign out</button>
  </header>
@@ -535,6 +679,70 @@ DASHBOARD_HTML = """<!doctype html>
  </div>
 </div>
 
+<!-- ==================== SETTINGS ==================== -->
+<div id="sm-ov" hidden>
+ <div class="sm">
+  <div class="sm-hdr">
+   <h2>Configuration</h2>
+   <div class="sm-tabs">
+    <button class="sm-tab on" data-t="env">Credentials &amp; Env</button>
+    <button class="sm-tab" data-t="strategy">Strategy</button>
+    <button class="sm-tab" data-t="firm">Firm Profile</button>
+    <button class="sm-tab" data-t="instruments">Instruments</button>
+   </div>
+  </div>
+  <div class="sm-body">
+   <!-- credentials -->
+   <div class="tp on" id="tp-env">
+    <div class="rn">Changes are saved to <code>.env</code> in the server directory and take effect on the <b>next restart</b>. Shell environment variables take precedence over this file.</div>
+    <div class="fld-row">
+     <div class="fld"><label>MT5_LOGIN</label>
+      <input type="text" id="ev-MT5_LOGIN" placeholder="12345678" autocomplete="off">
+      <div class="ht">MT5 account login number</div></div>
+     <div class="fld"><label>MT5_SERVER</label>
+      <input type="text" id="ev-MT5_SERVER" placeholder="ICMarkets-Demo01" autocomplete="off">
+      <div class="ht">Broker server name</div></div>
+    </div>
+    <div class="fld"><label>MT5_PASSWORD</label>
+     <input type="password" id="ev-MT5_PASSWORD" placeholder="Leave blank to keep existing" autocomplete="new-password">
+     <div class="ht">MT5 account password — leave blank to keep the current value</div></div>
+    <div class="fld"><label>MT5_TERMINAL_PATH <span style="text-transform:none;font-weight:400">(optional)</span></label>
+     <input type="text" id="ev-MT5_TERMINAL_PATH" placeholder='C:\\Program Files\\MetaTrader 5\\terminal64.exe' autocomplete="off">
+     <div class="ht">Custom path to MT5 terminal executable (Windows only)</div></div>
+    <div class="fld"><label>STATE_DB</label>
+     <input type="text" id="ev-STATE_DB" placeholder="data/state.sqlite" autocomplete="off">
+     <div class="ht">SQLite state database path (default: data/state.sqlite)</div></div>
+    <div class="tgl-row">
+     <div class="ti"><b>LIVE_TRADING</b>
+      <small> — three-factor arming gate (this env var + ARM_LIVE file + config checksum must all match)</small></div>
+     <label class="tgl"><input type="checkbox" id="ev-LIVE_TRADING"><span class="sl"></span></label>
+    </div>
+    <p class="small mut" style="margin-top:12px"><code>API_TOKEN</code> must be set as a shell env var before starting the server — it is the auth token for this panel and cannot be changed here.</p>
+   </div>
+   <!-- strategy -->
+   <div class="tp" id="tp-strategy">
+    <p class="small mut" style="margin:0 0 10px">Edit the strategy YAML. Validation runs before saving. Mid-session changes are limited to risk reductions only.</p>
+    <textarea class="ya" id="ya-strategy" spellcheck="false"></textarea>
+   </div>
+   <!-- firm profile -->
+   <div class="tp" id="tp-firm">
+    <p class="small mut" style="margin:0 0 10px"><b>Verify every field against your firm's current Terms of Service</b> before saving. The engine refuses to start if internal buffers fall outside the firm limits.</p>
+    <textarea class="ya" id="ya-firm" spellcheck="false"></textarea>
+   </div>
+   <!-- instruments -->
+   <div class="tp" id="tp-instruments">
+    <div class="rn">Instrument spec changes take effect on the <b>next server restart</b>. Boot validation compares these specs against the live broker symbol info and refuses mismatches.</div>
+    <textarea class="ya" id="ya-instruments" spellcheck="false"></textarea>
+   </div>
+  </div>
+  <div class="sm-foot">
+   <button class="primary" id="smSave" style="width:auto;padding:9px 20px">Save</button>
+   <button class="ghost" id="smClose">Close</button>
+   <span class="smsg" id="smMsg"></span>
+  </div>
+ </div>
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
 let token = localStorage.token || '';
@@ -547,7 +755,9 @@ async function api(path, opts){
  try{ res = await fetch(path, o); }
  catch(e){ const err = new Error('network'); err.kind = 'network'; throw err; }
  if(res.status === 401){ const err = new Error('auth'); err.kind = 'auth'; throw err; }
- if(!res.ok){ const err = new Error('http ' + res.status); err.kind = 'http'; throw err; }
+ if(!res.ok){ let d='http '+res.status;
+  try{const j=await res.json();d=j.detail||d;}catch(e){}
+  const err=new Error(d);err.kind='http';err.detail=d;throw err; }
  return res.json();
 }
 
@@ -772,14 +982,112 @@ async function refresh(){
 // ---- boot --------------------------------------------------------------------
 if(token){ $('login').style.display = 'none'; $('app').hidden = false;
  refresh(); timer = setInterval(refresh, 5000); }
+
+// ---- settings ---------------------------------------------------------------
+let smTab = 'env';
+
+function smTabSwitch(t){
+ smTab = t;
+ document.querySelectorAll('.sm-tab').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+ document.querySelectorAll('.tp').forEach(p => p.classList.toggle('on', p.id === 'tp-' + t));
+ if(t === 'strategy') smLoadYaml('strategy');
+ else if(t === 'firm') smLoadYaml('firm');
+ else if(t === 'instruments') smLoadYaml('instruments');
+}
+document.querySelectorAll('.sm-tab').forEach(b => b.onclick = () => smTabSwitch(b.dataset.t));
+
+$('settingsBtn').onclick = async () => {
+ $('sm-ov').hidden = false;
+ smTabSwitch('env');
+ await smLoadEnv();
+};
+$('smClose').onclick = () => { $('sm-ov').hidden = true; };
+
+async function smLoadEnv(){
+ try{
+  const r = await api('/config/env');
+  ['MT5_LOGIN','MT5_SERVER','MT5_TERMINAL_PATH','STATE_DB'].forEach(k => {
+   const el = $('ev-' + k);
+   if(el) el.value = (r[k] && r[k].value) ? r[k].value : '';
+  });
+  $('ev-MT5_PASSWORD').value = '';
+  $('ev-LIVE_TRADING').checked = !!(r['LIVE_TRADING'] && r['LIVE_TRADING'].value === '1');
+ }catch(e){ smMsg('Failed to load config: ' + (e.detail || e.message), 'bad'); }
+}
+
+async function smLoadYaml(name){
+ const el = $('ya-' + name);
+ if(!el) return;
+ el.value = 'Loading...';
+ try{ const r = await api('/config/' + name); el.value = r.yaml; }
+ catch(e){ el.value = '# failed to load: ' + (e.detail || e.message); }
+}
+
+function smMsg(msg, cls){
+ const el = $('smMsg');
+ el.textContent = msg; el.className = 'smsg ' + (cls || '');
+ if(cls) setTimeout(() => { el.textContent = ''; el.className = 'smsg'; }, 6000);
+}
+
+$('smSave').onclick = async () => {
+ smMsg('Saving…', '');
+ $('smSave').disabled = true;
+ try{
+  if(smTab === 'env'){
+   const p = {author: 'dashboard'};
+   ['MT5_LOGIN','MT5_SERVER','MT5_TERMINAL_PATH','STATE_DB'].forEach(k => {
+    const v = $('ev-' + k).value.trim(); if(v) p[k] = v;
+   });
+   const pwd = $('ev-MT5_PASSWORD').value;
+   if(pwd) p['MT5_PASSWORD'] = pwd;
+   p['LIVE_TRADING'] = $('ev-LIVE_TRADING').checked ? '1' : '';
+   await api('/config/env', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify(p)});
+   smMsg('Saved — restart server to apply', 'ok');
+  } else if(smTab === 'strategy'){
+   await api('/config', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({yaml: $('ya-strategy').value, author: 'dashboard'})});
+   smMsg('Strategy config updated', 'ok');
+   refresh();
+  } else if(smTab === 'firm'){
+   await api('/config/firm', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({yaml: $('ya-firm').value, author: 'dashboard'})});
+   smMsg('Firm profile saved', 'ok');
+  } else if(smTab === 'instruments'){
+   await api('/config/instruments', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({yaml: $('ya-instruments').value, author: 'dashboard'})});
+   smMsg('Instruments saved — restart required', 'ok');
+  }
+ }catch(err){
+  if(err.kind === 'auth') return showLogin('Session expired — sign in again.');
+  smMsg(err.detail || err.message || 'Save failed', 'bad');
+ } finally { $('smSave').disabled = false; }
+};
 </script></body></html>
 """
 
 
-def main() -> None:  # pragma: no cover - process entrypoint
-    import os
+def _load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            k, _, v = line.partition("=")
+            k = k.strip()
+            if k and k not in os.environ:
+                os.environ[k] = v.strip()
 
+
+def main() -> None:  # pragma: no cover - process entrypoint
     import uvicorn
+
+    _load_env_file(Path(".env"))
 
     from adapters.ff_calendar import FileCalendar
     from adapters.sqlite_store import SqliteStore

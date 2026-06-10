@@ -11,3 +11,4 @@ dist/
 *.db
 data/
 ARM_LIVE
+.env
